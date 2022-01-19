@@ -1,3 +1,13 @@
+{- 
+These are called "Language Pragmas". 
+They direct the Haskell compiler to enable an extension or 
+modification of the Haskell language.
+-}
+{-
+DataKinds Pragma:
+https://wiki.haskell.org/Kind
+https://stackoverflow.com/questions/20558648/what-is-the-datakinds-extension-of-haskell
+-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveGeneric              #-}
