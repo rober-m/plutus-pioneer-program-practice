@@ -31,7 +31,9 @@ import           Text.Printf         (printf)
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
--- INLINABLE needed because we will use it inside Template Haskell, and it needs everything in one line.
+{- This "INLINABLE" is needed because we will use something called "Oxford brackets" that we'll explan 
+when we'll use them. This line indicates that mkValidator is in-line inside those special brackets.
+-}
 {-# INLINABLE mkValidator #-}
 {- 
 
@@ -71,15 +73,70 @@ validator is of type Validator.
 -}
 validator :: Validator
 {-
-In order to obtain the validator, you have to compile the mkValidator function to core Plutus
+In order to obtain the validator from mkValidator, we have to use the function mkValidatorScript that we imported from Ledger.Scripts.
+If we see the signature of this function, we see that it returns a value of type Validator (awesome, that's what we need)
+and that it takes a function with the signature of mkValidator, but not directly.
+Before it passes through something called CompiledCode:
+
+CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ()) -> Validator
+
+That means that we have to comile the code to Plutus script before passing it to mkValidatorScript.
+Luckly, we already have a function to do just that: The compile function imported from PlutusTx.compile.
+Let's see the signature of compile:
+
+Q (TExp a) -> Q (TExp (CompiledCode a)) 
+
+Ok, translated to something that we can understand, the compile function takes a syntax tree (a representation) of an expression in Haskell
+and returns the syntax tree of the same expression but in Plutus core. Ok, cool. But we have the expression. 
+How can we convert mkValidator from expression to syntax tree? By using Template Haskell (explain Template Haskell).
+
+By surrounding the expression between special brackets [|| and ||] called "Oxford backets", like this: [|| expression ||]. 
+This is called "Quoting", and it will return the underlying syntax tree that defines the expression.
+
+We pass the result of quoting to the compile fuction and it returns another syntax tree but now one that defines the
+expression in Plutus core. But wait! mkValidatorScript takes CompiledCode (Plutus core code) as input, not the syntax tree of the compiled code.
+We need a way to transform the syntax tree to the code that thtat it defines. Template Haskell to the rescue! Again!
+
+By adding $$ (called "Splice") to the syntax tree, like this: $$(tree) we obtain the Plutus core code like if we would code it ourselves.
+It works something like the reverse of the Oxford brackets. Handy right?
+
+Ok, that's it! we've created our first validator! :D
 -}
 validator = mkValidatorScript $$(PlutusTx.compile [|| mkValidator ||])
 
+{-
+Now, let's use the validator to generate the values that we need.
+
+We need to creat the validator hash because we'll need it to refer to the script later.
+We creat the signature of valHash that uses the type ValidatorHash from Ledger, and we define valHash
+by using the validatorHash funciton from Scripts, that takes a validator and returns a ValidatorHash:
+
+validatorHash :: Validator -> ValidatorHash
+
+The actual value of validatorHash would look something like this:
+67f33146617a5e61936081db3b2117cbf59bd2123748f58ac9678656
+
+-}
 valHash :: Ledger.ValidatorHash
 valHash = Scripts.validatorHash validator
 
+{-
+We also need the address of the validator on the blockchain. The address can be obtained by passing
+the validator to the scriptAddress function that takes a validator and returns an address of type Adress.
+
+A value of type Address would look something like this:
+Address {addressCredential = ScriptCredential 67f33146617a5e61936081db3b2117cbf59bd2123748f58ac9678656, addressStakingCredential = Nothing}
+-}
 scrAddress :: Ledger.Address
 scrAddress = scriptAddress validator
+
+
+{-
+CONGRATULATIONS! We wrote the entire on-chain part of the contract!! :D Of course, we need to interact with 
+the validator, so we need some off-chain code that a wallet will run to construct the transactions and talk
+with our validator. Let's go create the off-chain code!
+-}
+
 
 type GiftSchema =
             Endpoint "give" Integer
