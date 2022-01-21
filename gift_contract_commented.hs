@@ -137,12 +137,48 @@ the validator, so we need some off-chain code that a wallet will run to construc
 with our validator. Let's go create the off-chain code!
 -}
 
+{-
+This type definition defines the endpoints. The endpoints are ways for the user to trigger something.
+We will use two end points:
+give: Endpoint that a user can interact with to give money to the contract
+grab: Endpoint that a user can interact with to grab all the money of the contract.
 
+The give endpoint receives an Integer as parameter to allow the user to select how many Lovelace wants to give.
+The grab endpoint has no parameters because we don't need any. We'll grab all the Lovelace from all the EUTxO sitting at this address.
+-}
 type GiftSchema =
             Endpoint "give" Integer
         .\/ Endpoint "grab" ()
 
+{-
+In the give endpoint signature we specify that we pass an Integer and return a Cotract.
+Why do we return a Contract? Because.. TODO.
+
+The Contract constructor needs four parameters:
+w : TODO
+s : Contract schema.
+e : Error that the contract can produce.
+a : Type of the value that the contract can produce.
+
+TODO: explain Contract (inside http://0.0.0.0:8002/haddock/plutus-contract/html/Plutus-Contract.html) and AsContractError
+
+-}
 give :: AsContractError e => Integer -> Contract w s e ()
+{-
+Now we'll define the give endpoint.
+
+The give endpoint, first has to create/build the transaction. We'll create the transaction using the
+submitTx function. Let's see the signature of submitTx to know what we need to provide:
+
+AsContractError e => TxConstraints Void Void -> Contract w s e CardanoTx
+
+There are two new things here: TxConstraints, Void, and CardanoTx. Let's check them!
+
+Before calling the function, well specify the transaction constraints and save them in a variable called tx:
+
+let tx = mustPayToOtherScript valHash (Datum $ Builtins.mkI 0) $ Ada.lovelaceValueOf amount
+
+-}
 give amount = do
     let tx = mustPayToOtherScript valHash (Datum $ Builtins.mkI 0) $ Ada.lovelaceValueOf amount
     ledgerTx <- submitTx tx
