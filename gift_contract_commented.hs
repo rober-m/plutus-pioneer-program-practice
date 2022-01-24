@@ -156,12 +156,12 @@ Why do we return a Contract? Because.. TODO.
 
 The Contract constructor needs four parameters:
 w : TODO
-s : Contract schema.
+s : Contract schema. It contains effects such as collecting inputs fromusers, watching thelbockchain
+for transactions, and producing transactions.
 e : Error that the contract can produce.
-a : Type of the value that the contract can produce.
+a : Type of the value that the contract can produce. We'll allways return (), so the type of a will allways be ().
 
-TODO: explain Contract (inside http://0.0.0.0:8002/haddock/plutus-contract/html/Plutus-Contract.html) and AsContractError
-
+AscontractError e => Indicates that e is restricted to be of type AsContractError.
 -}
 give :: AsContractError e => Integer -> Contract w s e ()
 {-
@@ -172,11 +172,45 @@ submitTx function. Let's see the signature of submitTx to know what we need to p
 
 AsContractError e => TxConstraints Void Void -> Contract w s e CardanoTx
 
-There are two new things here: TxConstraints, Void, and CardanoTx. Let's check them!
+We have to provide TxConstraints Void Void and the function will produce a Contract that returns
+a value of type CardanoTx.
 
-Before calling the function, well specify the transaction constraints and save them in a variable called tx:
+Ok, let's go in parts. Before calling the function, well specify the transaction constraints and 
+save them in a variable called tx:
 
 let tx = mustPayToOtherScript valHash (Datum $ Builtins.mkI 0) $ Ada.lovelaceValueOf amount
+
+The signature of mustPayToOtherScript (defined in Ledger/Constraints/TxConstraints.hs) is:
+
+mustPayToOtherScript :: ValidatorHash -> Datum -> Value -> TxConstraints i o
+
+So, to create the transactions constraints, we have to provide the valHash, the Datum, and the value that we
+want to transfer. We already calculated valHash, one value done. And in this case, we don't care about
+the Datum (because we'll ignore it in the validator), but we have to specify one, so we'll provide an arbitrary one.
+
+We can create a Datum by using the Datum constructor. Its signature ( Datum :: BuiltinData -> Datum ) indicates 
+that we have to pass a value of type BuiltinData. We'll do that by using the Builtins.mkI function 
+(mkI :: BuiltinInteger -> BuiltinData) that takes a BuiltinInteger and returns the value of type
+BuiltinData. We'll pass a 0 as value, it doesn't really matter.
+
+All the Datum operation together will happen in this expression (Datum $ Builtins.mkI 0).
+
+Now, we need to specify how much funds we want to send in the transaction (the value of type Value).
+To obtain the Value in Lovelace, we'll pass the ammount of type Integer to the Ada.lovelaceValueOf function.
+This value will be provided by the user that wants to give ada, so it will be a prarameter of the 
+give function called amount.
+
+And that's it! As a reward for our efforts, we get the transaction constraints that say to pay "amount" of 
+lovelace to valHash script with the Datum we provided.
+
+Well submit the transaction with submitTx and we'll save the transaction of type CardanoTx in ledgerTx.
+Now, we have to wait for confirmation by using the awaitConfirmed function 
+(awaitTxConfirmed :: AsContractError e => TxId -> Contract w s e ()) that takes a TxId that we can obtain 
+by passing ledgerTx to getCardanoTxId (getCardanoTxId :: CardanoTx -> TxId).
+
+Once the transaction is confirmed, we log a message to record the event with logInfo function:
+
+    logInfo @String $ printf "made a gift of %d lovelace" amount
 
 -}
 give amount = do
@@ -185,7 +219,40 @@ give amount = do
     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
     logInfo @String $ printf "made a gift of %d lovelace" amount
 
+{-
+The signature of the grab function is the same as the give function except for the lack of
+Integer (because we don't need it. We'll grab everything in the contract) and the extra:
+
+forall w s e.
+
+I did some research, and I'm still not entirely sure how the forall keyword
+works. But as far as I can tell, we can safely ignore it and we'll be fine. If you know and are
+inclied to, please write to me on Twitter to provide a short paragraph explaining forall in this
+situation :D.
+-}
 grab :: forall w s e. AsContractError e => Contract w s e ()
+{-
+The first thing that we're going to do is to look at all the utxos sitting at the srcAdress 
+and saves them in utxos:
+
+    utxos <- utxosAt scrAddress
+
+The, we'll get the references for all those utxos and save them on the orefs variable:
+
+    let orefs   = fst <$> Map.toList utxos
+
+In this line, we pass th utxos to the function Map.toList (toList :: Map k a -> [(k, a)]) that
+takes a Map and returns a list of tuples containing each tuple a key-value pair. Then, we'll
+apply fst function to each tuplple of the list using <$> to obtain the list of references (k)
+of all utxos.
+
+Next, we have to obtain the lookups to tell the wallet how to construct the transaction. We'll do this by
+...TODO
+
+    let lookups = Constraints.unspentOutputs utxos      <>
+                  Constraints.otherScript validator
+
+-}
 grab = do
     utxos <- utxosAt scrAddress
     let orefs   = fst <$> Map.toList utxos
