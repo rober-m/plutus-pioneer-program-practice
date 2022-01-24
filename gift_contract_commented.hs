@@ -1,4 +1,10 @@
-
+{- 
+These are called "Language Pragmas". 
+They direct the Haskell compiler to enable an extension or modification of the Haskell 
+language.
+We won't cover in detail what each pragma does, becauase the tutorial it's long enough
+without that. But I'll explain some basic concepts when we need them to understand the code.
+-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
@@ -7,6 +13,12 @@
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE TypeOperators       #-}
+
+{-
+For the sake of understanding the code, we can ignore this imports and think of 
+them as "importing all the Plutus modules that we'll need". We don't care where
+a function is defined, we care about what it does and how can we use it.
+-}
 
 module Week02.Gift where
 
@@ -232,6 +244,9 @@ situation :D.
 -}
 grab :: forall w s e. AsContractError e => Contract w s e ()
 {-
+This time, we'll create a more complex transaction, so we'll create a couple of intermediary
+variables.
+
 The first thing that we're going to do is to look at all the utxos sitting at the srcAdress 
 and saves them in utxos:
 
@@ -247,11 +262,79 @@ apply fst function to each tuplple of the list using <$> to obtain the list of r
 of all utxos.
 
 Next, we have to obtain the lookups to tell the wallet how to construct the transaction. We'll do this by
-...TODO
+Smashing together the values of type ScriptLookups returned of these functions:
+
+ unspentOutputs: A script lookups value that uses the map of unspent outputs to resolve input constraints.
+ otherScript: A script lookups value with a validator script. If we want to consume a utxo sitting at a
+                script address, then the spending transaction needs to provide the validator code ( where
+                the producing transaction only has to provide the hash).
+
+Like this:
 
     let lookups = Constraints.unspentOutputs utxos      <>
                   Constraints.otherScript validator
 
+<> means that we're joining/smashing together the two constraints (for more information on the
+<> operator, you can see [this video](https://youtu.be/bsp5pJlw6R0)).
+
+Now, let's define the transaction.
+Because we now have multiples utxo, we'll make use of list comprehension (if you don't know
+how list comprehension works, [here]() is a tweet where do an overview on how it works).
+
+We'll take each utxo reference in orefs and pass it to the mustSpendScriptOutput function.
+The mustSpendScriptOutput function signature is
+
+mustSpendScriptOutput:: TxOutRef -> Redeemer -> TxConstraints i o 
+
+So, we need to pass a utxo reference and a Redeemer to obtain the TxConstraints.
+We already have the reference (each value inside the orefs list) and because we ignore
+the redeemer in the validator, we can pass any arbitrary value of type Redeemer (same as with Datum).
+
+We'll creat a random redeemer same as with Datum:
+
+Redeemer (Builtins.mkI 17)
+
+or the same but with different syntax:
+    
+Redeemer $ Builtins.mkI 17
+
+And we'll pass each oref with this Redeemer to mustSpendScriptOutput, 
+generating a list of transaction constraints (one for each utxo).
+
+With all those operations, we obtained a list of TxConstraints. We'll
+execute the transactions using submitTxConstraintsWith, that will build a transaction 
+that satisfies the constraints and then submit it to the network using the given constraints.
+Its signature is a handfull:
+
+submitTxConstraintsWith :: (FromData (DatumType a), ToData (RedeemerType a), ToData (DatumType a), AsContractError e) => ScriptLookups a -> TxConstraints (RedeemerType a) (DatumType a) -> Contract w s e CardanoTx
+
+The important part for us is that we have all the right types except for TxConstraints. We don't
+have a single TxConstraints, we have a list of them! So we need a way to merge them all in a single
+TxConstraints. That's when mconcat (mconcat :: Monoid a => [a] -> a) comes in handy. We pass the list
+of transaction constraints to mconcat and we obtain a single all-powerfull Txconstraints that we can
+pass to submitTxconstrinatsWith. Finally, we save the value in the tx variable:
+
+    tx  = mconcat [mustSpendScriptOutput oref $ Redeemer $ Builtins.mkI 17 | oref <- orefs]
+
+As we can see in the signature submitTxConstraintsWith takes as inputs the script lookkups and
+the transaction constraints. So we have everything that we need to execute the transaction and save it
+as ledgetTx:
+
+    ledgerTx <- submitTxConstraintsWith @Void lookups tx
+
+The @Type (@Void, @String, etc.) is TypeApplication syntax.
+TypeApplication allows us to give explicit type arguments to a polymorphic function.
+Here, we're basically saying to Haskell that we want to "pick up the instance of @Void" for the
+FromData (DatumType a) constraint (the first constraint before the fat arrow =>).
+You can learn more about TypeApplication [here](https://gitlab.haskell.org/ghc/ghc/-/wikis/type-application).
+
+Once the transaction i executed, we wait for the confirmation, like in the give endpoint:
+
+    void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
+
+And after confirmation, we log a message confirming that we collected that sweet sweet Lovelace
+
+    logInfo @String $ "collected gifts"
 -}
 grab = do
     utxos <- utxosAt scrAddress
@@ -264,6 +347,13 @@ grab = do
     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
     logInfo @String $ "collected gifts"
 
+{-
+Now, we'll put everything together in teh endpoints function.
+
+We can do two things (two choices), either we give some Ada, or we grab all of it. To
+express that choice we use the select function. select returns the contract that makes progress 
+first, discarding the other one.
+-}
 endpoints :: Contract () GiftSchema Text ()
 endpoints = awaitPromise (give' `select` grab') >> endpoints
   where
