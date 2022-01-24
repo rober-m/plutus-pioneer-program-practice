@@ -159,8 +159,8 @@ The give endpoint receives an Integer as parameter to allow the user to select h
 The grab endpoint has no parameters because we don't need any. We'll grab all the Lovelace from all the EUTxO sitting at this address.
 -}
 type GiftSchema =
-            Endpoint "give" Integer
-        .\/ Endpoint "grab" ()
+	    Endpoint "give" Integer
+	.\/ Endpoint "grab" ()
 
 {-
 In the give endpoint signature we specify that we pass an Integer and return a Cotract.
@@ -266,13 +266,13 @@ Smashing together the values of type ScriptLookups returned of these functions:
 
  unspentOutputs: A script lookups value that uses the map of unspent outputs to resolve input constraints.
  otherScript: A script lookups value with a validator script. If we want to consume a utxo sitting at a
-                script address, then the spending transaction needs to provide the validator code ( where
-                the producing transaction only has to provide the hash).
+		script address, then the spending transaction needs to provide the validator code ( where
+		the producing transaction only has to provide the hash).
 
 Like this:
 
     let lookups = Constraints.unspentOutputs utxos      <>
-                  Constraints.otherScript validator
+		  Constraints.otherScript validator
 
 <> means that we're joining/smashing together the two constraints (for more information on the
 <> operator, you can see [this video](https://youtu.be/bsp5pJlw6R0)).
@@ -339,10 +339,10 @@ And after confirmation, we log a message confirming that we collected that sweet
 grab = do
     utxos <- utxosAt scrAddress
     let orefs   = fst <$> Map.toList utxos
-        lookups = Constraints.unspentOutputs utxos      <>
-                  Constraints.otherScript validator
-        tx :: TxConstraints Void Void
-        tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ Builtins.mkI 17 | oref <- orefs]
+	lookups = Constraints.unspentOutputs utxos      <>
+		  Constraints.otherScript validator
+	tx :: TxConstraints Void Void
+	tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ Builtins.mkI 17 | oref <- orefs]
     ledgerTx <- submitTxConstraintsWith @Void lookups tx
     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
     logInfo @String $ "collected gifts"
@@ -350,16 +350,43 @@ grab = do
 {-
 Now, we'll put everything together in teh endpoints function.
 
+First we'll create the endpoints by using the endpoint function of signature:
+
+endpoint :: forall l a w s e b. (HasEndpoint l a s, AsContractError e, FromJSON a) => (a -> Contract w s e b) -> Promise w s e b
+
+So, we need to provide a function that returns a Contract.
+We already have the contracts defined: give and grab. We'll indicate that the type
+of l (the first constraint) is of type "give" and "grab" respectively.
+Why? -> TODO.
+
+	give' = endpoint @"give" give
+	grab' = endpoint @"grab" $ const grab
+
 We can do two things (two choices), either we give some Ada, or we grab all of it. To
 express that choice we use the select function. select returns the contract that makes progress 
-first, discarding the other one.
+first, discarding the other one. We pass the select result to awaitPromise to
+wait for the user choice. Then, we use >> and pass the same endpoints function that we're
+defining to recursevely call it as many times as the user needs. And that's it!
+we have our endponts defined!:
 -}
+
 endpoints :: Contract () GiftSchema Text ()
 endpoints = awaitPromise (give' `select` grab') >> endpoints
   where
     give' = endpoint @"give" give
     grab' = endpoint @"grab" $ const grab
+{-
+We are done! Both our on-chain and off-chain code is finished! 
+-}
 
+{-
+mkSchemaDefinitions is a boilerplate function that creates the schema of the 
+contract. We apply it to use the code on the playground. It's not part of the
+contract.
+-}
 mkSchemaDefinitions ''GiftSchema
-
+{-
+we indicate mkKnownCurrencies [] so we can use Ada in the playground. This is 
+not part of the contract.
+-}
 mkKnownCurrencies []
