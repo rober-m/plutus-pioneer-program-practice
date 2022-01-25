@@ -353,9 +353,14 @@ First we'll create the endpoints by using the endpoint function of signature:
 endpoint :: forall l a w s e b. (HasEndpoint l a s, AsContractError e, FromJSON a) => (a -> Contract w s e b) -> Promise w s e b
 
 So, we need to provide a function that returns a Contract.
-We already have the contracts defined: give and grab. We'll indicate that the type
-of l (the first constraint) is of type "give" and "grab" respectively.
-Why? -> TODO.
+We already have the contracts defined: give and grab. We'll indicate that the types
+of give and grab will be "give" and "grab" respectively. We'll do that by passing the
+type parameters @"give" and @"grab". TODO: The @"text" apply to the constraints or the vale parameter
+that goes after?
+Why? -> TODO -> 
+	- https://discordapp.com/channels/826816523368005654/834340082273878046/877574350868451348
+	- https://zacwood.me/posts/haskell-type-application/
+	- 
 
 	give' = endpoint @"give" give
 	grab' = endpoint @"grab" $ const grab
