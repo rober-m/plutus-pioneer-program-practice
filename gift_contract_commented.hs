@@ -157,6 +157,7 @@ grab: Endpoint that a user can interact with to grab all the money of the contra
 
 The give endpoint receives an Integer as parameter to allow the user to select how many Lovelace wants to give.
 The grab endpoint has no parameters because we don't need any. We'll grab all the Lovelace from all the EUTxO sitting at this address.
+The .\/ operator is a way to join Endpoints.
 -}
 type GiftSchema =
 	    Endpoint "give" Integer
