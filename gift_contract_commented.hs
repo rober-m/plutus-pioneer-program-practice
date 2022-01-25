@@ -233,14 +233,11 @@ give amount = do
 
 {-
 The signature of the grab function is the same as the give function except for the lack of
-Integer (because we don't need it. We'll grab everything in the contract) and the extra:
-
-forall w s e.
-
-I did some research, and I'm still not entirely sure how the forall keyword
-works. But as far as I can tell, we can safely ignore it and we'll be fine. If you know and are
-inclied to, please write to me on Twitter to provide a short paragraph explaining forall in this
-situation :D.
+Integer (because we don't need it. We'll grab everything in the contract) and the 
+extra "forall" keyword. That is a keyword provided by the ScopedTypeVariables pragma.
+forall is used to bind type variables and refer to them later throught the remainder 
+of the function’s definition. For the scope of this tutorial, we can safely
+ignore the details.
 -}
 grab :: forall w s e. AsContractError e => Contract w s e ()
 {-
