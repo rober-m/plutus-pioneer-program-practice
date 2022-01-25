@@ -1,5 +1,5 @@
 {-
-This contract is basically the same as the gift/burn contract but with a small change.
+This contract is basically the same as the FortyTwo contract but with types.
 I'll only comment the changes, everything else, look for in the gift and
 FortyTwo contracts.
 -}
