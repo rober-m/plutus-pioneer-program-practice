@@ -172,11 +172,19 @@ give gp = do
 
 grab :: forall w s e. AsContractError e => Contract w s e ()
 grab = do
+    -- I get the current time
     now   <- currentTime
+    -- I get my own PaymentPubKeyHash
     pkh   <- ownPaymentPubKeyHash
+    {-
+    I get all teh utxos sitting at the script address and I filter them to obtain only
+    the ones that are suitablle (isSuitable is defined below).
+    -}
     utxos <- Map.filter (isSuitable pkh now) <$> utxosAt scrAddress
     if Map.null utxos
+        -- If there are none suitable utxos, log it and done.
         then logInfo @String $ "no gifts available"
+        -- If there are, grab them.
         else do
             let orefs   = fst <$> Map.toList utxos
                 lookups = Constraints.unspentOutputs utxos  <>
@@ -185,16 +193,35 @@ grab = do
                 -- TODO: How does Plutus know the Datum? Magic on the background? Lars doesn't know (Q&A Week03)
                 -- TODO: Lars thinks that the PlutusPlayground automatically includes the Datum.
                 tx      = mconcat [Constraints.mustSpendScriptOutput oref unitRedeemer | oref <- orefs] <>
+                         {-
+                         In this case, I can't create the default transaction with the time-constraint set
+                         to negative and positive infinity because I have to make sure to specify a transaction
+                         that happens after the deadline.
+                         mustValidateIn ads the constraint that the transaction its make in a interval from now to infinity.
+                         Otherwise, the validato won't be sure that the deadline has passed.
+                         -}
                           Constraints.mustValidateIn (from now)
             ledgerTx <- submitTxConstraintsWith @Void lookups tx
             void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
             logInfo @String $ "collected gifts"
   where
+    {-
+    isSuitable takes the beneficiary hash, the deadline, and the output transaction.
+    We need the output transacion because that's where I can get the Datum. 
+    -}
     isSuitable :: PaymentPubKeyHash -> POSIXTime -> ChainIndexTxOut -> Bool
+    -- First I check if I have the Datum or the Datum's hash
     isSuitable pkh now o = case _ciTxOutDatum o of
+        -- If I only have the Datum hash, I can't verify if I'm the beneficiary, so it fails
         Left _          -> False
+        -- If I do have the Datun, I try to deserialise it to the right type (VestingDatum in this case).
         Right (Datum e) -> case PlutusTx.fromBuiltinData e of
+            -- If the deserialization fails, I drop the utxo
             Nothing -> False
+            {-
+            If it suceeds, I copare the beneficiary with my pubkic kwy and the deadline with the current
+            time. If either is False, I return False, otherwise, I return True.
+            -}
             Just d  -> beneficiary d == pkh && deadline d <= now
 
 endpoints :: Contract () VestingSchema Text ()
