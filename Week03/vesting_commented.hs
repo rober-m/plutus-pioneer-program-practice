@@ -152,6 +152,7 @@ type VestingSchema =
 give :: AsContractError e => GiveParams -> Contract w s e ()
 -- We pass gp :: GiveParams as a parameter.
 give gp = do
+    -- We create the Datum
     let dat = VestingDatum
                 { beneficiary = gpBeneficiary gp
                 , deadline    = gpDeadline gp
@@ -201,6 +202,7 @@ grab = do
                          Otherwise, the validato won't be sure that the deadline has passed.
                          -}
                           Constraints.mustValidateIn (from now)
+            -- @Void indicates that we'll use the Void type of lookups
             ledgerTx <- submitTxConstraintsWith @Void lookups tx
             void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
             logInfo @String $ "collected gifts"
