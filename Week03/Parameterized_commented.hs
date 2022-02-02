@@ -152,11 +152,13 @@ type VestingSchema =
 
 give :: AsContractError e => GiveParams -> Contract w s e ()
 give gp = do
+    -- We create p
     let p  = VestingParam
                 { beneficiary = gpBeneficiary gp
                 , deadline    = gpDeadline gp
                 }
         tx = Constraints.mustPayToTheScript () $ Ada.lovelaceValueOf $ gpAmount gp
+    -- typedValidator now needs the parameter p :: VesingParam
     ledgerTx <- submitTxConstraints (typedValidator p) tx
     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
     logInfo @String $ printf "made a gift of %d lovelace to %s with deadline %s"
@@ -164,10 +166,12 @@ give gp = do
         (show $ gpBeneficiary gp)
         (show $ gpDeadline gp)
 
+-- Like we said before, we need to pass the deadline d :: POSIXTime to grab
 grab :: forall w s e. AsContractError e => POSIXTime -> Contract w s e ()
 grab d = do
     now   <- currentTime
     pkh   <- ownPaymentPubKeyHash
+    -- Check if the deadline passed
     if now < d
         then logInfo @String $ "too early"
         else do
@@ -175,12 +179,19 @@ grab d = do
                         { beneficiary = pkh
                         , deadline    = d
                         }
+            {- 
+            Gett all the utxos sitting on the script address that are for us (pkh inside p).
+            scrAddress is not a constant anymore, we have to pass p.
+            -}
             utxos <- utxosAt $ scrAddress p
+            -- If utxos is not empty, all of them are valid available gifts.
             if Map.null utxos
                 then logInfo @String $ "no gifts available"
                 else do
+                    -- We create and submit the transaction for all utxo inside utxos
                     let orefs   = fst <$> Map.toList utxos
                         lookups = Constraints.unspentOutputs utxos      <>
+                                  -- Validator needs p
                                   Constraints.otherScript (validator p)
                         tx :: TxConstraints Void Void
                         tx      = mconcat [Constraints.mustSpendScriptOutput oref unitRedeemer | oref <- orefs] <>
@@ -193,6 +204,7 @@ endpoints :: Contract () VestingSchema Text ()
 endpoints = awaitPromise (give' `select` grab') >> endpoints
   where
     give' = endpoint @"give" give
+    -- grab takes a parameter, so it's not a constant anymore.
     grab' = endpoint @"grab" grab
 
 mkSchemaDefinitions ''VestingSchema
