@@ -44,6 +44,10 @@ data VestingDatum = VestingDatum
 
 PlutusTx.unstableMakeIsData ''VestingDatum
 
+-- TODO: Check if my answer workd. I tried but I can't grab the gift from any
+-- TODO: wallet that isn't the gifter. Even with Lars' code and double checking the PubKey
+-- TODO: of the beneficiary. Try again after a few days.
+
 {-# INLINABLE mkValidator #-}
 -- This should validate if either beneficiary0 has signed the transaction and the current slot is before or at the deadline
 -- or if beneficiary1 has signed the transaction and the deadline has passed.
