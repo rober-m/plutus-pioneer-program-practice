@@ -182,6 +182,9 @@ grab d = do
             {- 
             Gett all the utxos sitting on the script address that are for us (pkh inside p).
             scrAddress is not a constant anymore, we have to pass p.
+
+            IMP: Because we specify the deadline we ar looking for as an argument, we won't be able
+            IMP: to collect the gifts of prevoius deadlines (this didn't happened in the Vesting contract).
             -}
             utxos <- utxosAt $ scrAddress p
             -- If utxos is not empty, all of them are valid available gifts.
