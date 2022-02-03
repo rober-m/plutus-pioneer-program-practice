@@ -48,7 +48,7 @@ mkValidator pkh dat _ ctx = traceIfFalse "You're not the beneficiary" isBenefici
       isBeneficiary = txSignedBy info $ unPaymentPubKeyHash pkh
 
       isDeadlineReached :: Bool
-      isDeadlineReached = contains (txInfoValidRange info) $ from dat
+      isDeadlineReached = contains (from dat) $ txInfoValidRange info
 
 data Vesting
 instance Scripts.ValidatorTypes Vesting where
