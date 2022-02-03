@@ -46,6 +46,8 @@ mkValidator pkh dat _ ctx = traceIfFalse "You're not the beneficiary" isBenefici
 
       isBeneficiary :: Bool
       isBeneficiary = txSignedBy info $ unPaymentPubKeyHash pkh
+      -- Lars' solution:
+      -- isBeneficiary = unPaymentPubKeyHash pkh `elem` txInfoSignatories info
 
       isDeadlineReached :: Bool
       isDeadlineReached = contains (from dat) $ txInfoValidRange info
@@ -56,13 +58,17 @@ instance Scripts.ValidatorTypes Vesting where
     type instance RedeemerType Vesting = ()
 
 typedValidator :: PaymentPubKeyHash -> Scripts.TypedValidator Vesting
-typedValidator = undefined -- IMPLEMENT ME!
+typedValidator pkh = PlutusTx.mkTypedValidator @Vesting
+    ( $$(PlutusTx.compile [|| mkValidator ||]) `PlutusTx.applyCode` PlutusTx.liftCode pkh )
+    $$(PlutusTx.compile [|| wrap ||])
+    where
+        wrap = Scripts.wrapValidator @POSIXTime @()
 
 validator :: PaymentPubKeyHash -> Validator
-validator = undefined -- IMPLEMENT ME!
+validator = Scripts.validatorScript . typedValidator
 
 scrAddress :: PaymentPubKeyHash -> Ledger.Address
-scrAddress = undefined -- IMPLEMENT ME!
+scrAddress = Scripts.scriptAddress . validator
 
 data GiveParams = GiveParams
     { gpBeneficiary :: !PaymentPubKeyHash
