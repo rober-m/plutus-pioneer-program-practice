@@ -38,7 +38,17 @@ import           Text.Printf          (printf)
 
 {-# INLINABLE mkValidator #-}
 mkValidator :: PaymentPubKeyHash -> POSIXTime -> () -> ScriptContext -> Bool
-mkValidator _ _ _ _ = False -- FIX ME!
+mkValidator pkh dat _ ctx = traceIfFalse "You're not the beneficiary" isBeneficiary &&
+                            traceIfFalse "The deadline hasn't been reached" isDeadlineReached
+  where
+      info :: TxInfo
+      info = scriptContextTxInfo ctx 
+
+      isBeneficiary :: Bool
+      isBeneficiary = txSignedBy info $ unPaymentPubKeyHash pkh
+
+      isDeadlineReached :: Bool
+      isDeadlineReached = contains (txInfoValidRange info) $ from dat
 
 data Vesting
 instance Scripts.ValidatorTypes Vesting where
