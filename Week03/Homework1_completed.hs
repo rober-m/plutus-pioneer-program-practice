@@ -44,7 +44,7 @@ data VestingDatum = VestingDatum
 
 PlutusTx.unstableMakeIsData ''VestingDatum
 
--- TODO: Check if my answer workd. I tried but I can't grab the gift from any
+-- TODO: Check if my answer works. I tried but I can't grab the gift from any
 -- TODO: wallet that isn't the gifter. Even with Lars' code and double checking the PubKey
 -- TODO: of the beneficiary. Try again after a few days.
 
