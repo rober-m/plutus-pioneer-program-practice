@@ -36,16 +36,57 @@ Overview of the Contract monad parameter types:
 
 -- EmulatorTrace a
 
+-- ################################################################################################
+-- ######################################## EXAMPLE 1 #############################################
+
+{-
+We'll create a contract that doesn't write messages (unit), doesn't have endpoints (Empty), has
+errors of type Text, and returns unit. The only thing that we contract will do is to log something.
+
+We use Text because it's much more efficient than String for text data.
+-}
 myContract1 :: Contract () Empty Text ()
 myContract1 = do
+    {-
+    thrwowError throws an exeption with any message that we want to specify (of type Text in this case).
+    If the contract throws an exeption, it stops the execution right there. So, if we thrrow an exeption
+    here, we wont see the log that we'll add below.
+    
+    We have to specify that thrwoError comes from Contract because the EmulatorTrace monad also has a
+    throwError function.
+
+    We pass the result of throwError to void to a-void :D the warning that we are not using
+    the value. 
+    -}
     void $ Contract.throwError "BOOM!"
+    {-
+    logInfo (polimorphic) takes anything that's serializable (has ToJSON instance), logs it, and 
+    returns a Contract.
+    In this case we pass a literal string. But because we are using the OverloadedStrings extension,
+    logInfo doesn't know which type it is. So we specify the type by adding @String using TypeApplications.
+
+    We have to specify that logInfo comes from Contract because the EmulatorTrace monad also has a
+    logInfo function.
+    -}
     Contract.logInfo @String "hello from the contract"
 
+-- I'll create an EmulatorTrace called myTrace1
 myTrace1 :: EmulatorTrace ()
+{-
+The only thing myTrace1 will do is to activate myContract1. We'll pass Wallet 1 because we need
+to pass a wallet. Because we spacified that we'll return unit, we have to change the ContractHandle
+that activateContractWallet returns for a unit using void.
+
+This will execute the contract and the contract will log the message we wrote.
+-}
 myTrace1 = void $ activateContractWallet (knownWallet 1) myContract1
 
+-- To test myTrace1 we use runEmulatorTraceIO
 test1 :: IO ()
 test1 = runEmulatorTraceIO myTrace1
+
+-- ################################################################################################
+-- ######################################## EXAMPLE 2 #############################################
 
 myContract2 :: Contract () Empty Void ()
 myContract2 = Contract.handleError
@@ -60,6 +101,10 @@ test2 = runEmulatorTraceIO myTrace2
 
 type MySchema = Endpoint "foo" Int .\/ Endpoint "bar" String
 
+
+-- ################################################################################################
+-- ######################################## EXAMPLE 3 #############################################
+
 myContract3 :: Contract () MySchema Text ()
 myContract3 = do
     awaitPromise $ endpoint @"foo" Contract.logInfo
@@ -73,6 +118,10 @@ myTrace3 = do
 
 test3 :: IO ()
 test3 = runEmulatorTraceIO myTrace3
+
+
+-- ################################################################################################
+-- ######################################## EXAMPLE 4 #############################################
 
 myContract4 :: Contract [Int] Empty Text ()
 myContract4 = do
