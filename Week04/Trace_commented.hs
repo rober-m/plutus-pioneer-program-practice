@@ -1,3 +1,10 @@
+
+{-
+
+This contract is used to explain what the EmulatorTrace monad is and how it works
+Lesson: https://www.youtube.com/watch?v=qoUfgaHs1CI&list=PLNEK_Ejlx3x230-g-U02issX5BiWAgmSi&index=3
+
+-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds        #-}
 
