@@ -54,6 +54,9 @@ myContract1 = do
     
     We have to specify that thrwoError comes from Contract because the EmulatorTrace monad also has a
     throwError function.
+    
+    We don't need to specify @String like logInfo below because we already indicated the type in the
+    signature of myContract1.
 
     We pass the result of throwError to void to a-void :D the warning that we are not using
     the value. 
@@ -87,9 +90,43 @@ test1 = runEmulatorTraceIO myTrace1
 
 -- ################################################################################################
 -- ######################################## EXAMPLE 2 #############################################
+-- In this example, we'll run myContract1 of EXAMPLE 1, but catch and handle the exeption.
 
+{-
+Same signature as myContract1 but we changed the error type to Void.
+
+Void (Data.Void) is a type that has no values. It's different than unit because unit has only one
+value: the unit. But Void has no value at all.
+
+By changing the error type to Void, we indicate that this contract can't possibly throw an exeption.
+Because you vould have to provide a value of type Void to throwError, and there is no value of
+type Void.
+-}
 myContract2 :: Contract () Empty Void ()
+{-
+To handle the exeption we'll use handleError:
+
+handleError :: (e -> Contract w s e' a) -> Contract w s e a -> Contract w s e' a
+
+handleError takes two arguments: A handle from "e" to a Contract where the error could potentiallly
+change "e'", and a Contract with error of type "e". And returns the same Contract but with the error
+type of "e'".
+
+handleError executes Contract provided as a second argument. If there is no exeption, we get the result
+of type "a" and handleError returns that "a" without modification. If there is an exeption of type "e",
+then we apply our handler and get a contract with error type "e'" and run that one instead.
+-}
 myContract2 = Contract.handleError
+    {-
+    "err" is of type Text because myContract1 (second argument) has an error of type Text.
+    logError is the same as logInfo but logs the message at the Error level.
+
+    Because we want to concatenatenate "caught: " with the error and the error is of type Text,
+    we have to convert it to type String. Text provides a function for just that called unpack.
+
+    This time I don't need to specify @String because unpack returns a String and the compiler
+    can infer that the result of the concatenation is a text of type String.
+    -}
     (\err -> Contract.logError $ "caught: " ++ unpack err)
     myContract1
 
@@ -99,11 +136,10 @@ myTrace2 = void $ activateContractWallet (knownWallet 1) myContract2
 test2 :: IO ()
 test2 = runEmulatorTraceIO myTrace2
 
-type MySchema = Endpoint "foo" Int .\/ Endpoint "bar" String
-
-
 -- ################################################################################################
 -- ######################################## EXAMPLE 3 #############################################
+
+type MySchema = Endpoint "foo" Int .\/ Endpoint "bar" String
 
 myContract3 :: Contract () MySchema Text ()
 myContract3 = do
