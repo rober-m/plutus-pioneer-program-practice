@@ -74,7 +74,7 @@ myTrace = do
     waitUntilSlot takes a Slot, produces the side-effect of waiting until said Slot, and
     returns the Slot.
 
-    We use the void function to ignore the result.
+    We use the void function to ignore the result (void :: Functor f => f a -> f ()).
     -}
     void $ waitUntilSlot 20
     -- We call the grab endpoit whith wallet two. grab din't take any parameters, so we pass ().
