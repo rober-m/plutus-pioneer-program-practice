@@ -139,10 +139,27 @@ test2 = runEmulatorTraceIO myTrace2
 -- ################################################################################################
 -- ######################################## EXAMPLE 3 #############################################
 
+{-
+We define a type synonim (the convention is that the name contains "Schema" in it).
+
+Inside MySchema we define two endpoints: The foo and the bar endpoints.
+
+We define an endpoint by passing t TODO: 
+
+Example:
+            Endpoint "foo" Int
+
+The symbol ".\/" is a special operator of Plutus that concatenates Row elements.
+Endpoints are Row elements.
+-}
 type MySchema = Endpoint "foo" Int .\/ Endpoint "bar" String
 
 myContract3 :: Contract () MySchema Text ()
 myContract3 = do
+    {-
+
+        simplifyed signature of endpoint: endpoint :: (a -> Contract w s e b) -> Promise w s e b
+    -}
     awaitPromise $ endpoint @"foo" Contract.logInfo
     awaitPromise $ endpoint @"bar" Contract.logInfo
 
