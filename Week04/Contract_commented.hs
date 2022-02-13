@@ -137,7 +137,7 @@ test2 :: IO ()
 test2 = runEmulatorTraceIO myTrace2
 
 -- ################################################################################################
--- ######################################## EXAMPLE 3 #############################################
+-- ######################################## EXAMPLE 3A #############################################
 
 {-
 We define a type synonim (the convention is that the name contains "Schema" in it).
@@ -149,28 +149,79 @@ We define an endpoint by passing t TODO:
 Example:
             Endpoint "foo" Int
 
-The symbol ".\/" is a special operator of Plutus that concatenates Row elements.
+-}
+type MySchema = Endpoint "foo" Int
+
+myContract3a :: Contract () MySchema Text ()
+    {-
+        TODO: Try to understand better the "endpoint" function -> https://youtu.be/yKX5Ce8Y0VQ?t=1102
+    The signature of endpoint after the constraints is:
+        
+        endpoint :: (a -> Contract w s e b) -> Promise w s e b
+
+    Promise is a Contract that is block awaiting to be triggered by an outside stimulus.
+
+    @"foo" is a Type level string, and Contract.logInfo is a function of type Int -> Contract like
+    we specified in MySchema.
+
+    We need a Contract, not a Promise. So we use the function awaitPromise. awaitPromise will wait
+    until the endpoint is called with an Int, and will return The Contract with that Int passed.
+    -}
+myContract3a = awaitPromise $ endpoint @"foo" Contract.logInfo
+
+
+myTrace3a :: EmulatorTrace ()
+myTrace3a = do
+    {-
+    This time -- unlike myTrace2 -- it's not enough to activate the contract, because the
+    awaitPromise will keep awaiting forever until someone calls the endpoint.
+
+    In order to call the endpoint, we need the handle. So, instead of throwing it away using 
+    void, we'll bind it to a variable called "h" and reference it later.
+
+    To call the endpoint we'll use the callEndpoint fuction which takes a ContractHandle and 
+    the value that we want to provide to that endpint, and it invikes the endpoint.
+    We also need to tell the compiler which endpoint we want to call using the @"type". I didn't
+    understand yet how @"type" works in the endpoint function.
+    -}
+    h <- activateContractWallet (knownWallet 1) myContract3a
+    callEndpoint @"foo" h 42
+
+test3a :: IO ()
+test3a = runEmulatorTraceIO myTrace3a
+
+-- ################################################################################################
+-- ######################################## EXAMPLE 3B #############################################
+
+{-
+The symbol ".\/" is a type operator of Plutus that concatenates Row elements.
+A type operator is like a type constructor like Maybe, List, or Either.
+
+To use type operators, we need to use the extension TypeOperators.
 Endpoints are Row elements.
+
+We create another Endpiont called bar that takes a String
 -}
 type MySchema = Endpoint "foo" Int .\/ Endpoint "bar" String
 
-myContract3 :: Contract () MySchema Text ()
-myContract3 = do
-    {-
-
-        simplifyed signature of endpoint: endpoint :: (a -> Contract w s e b) -> Promise w s e b
-    -}
+myContract3b :: Contract () MySchema Text ()
+{-
+We need to add the "do" block because we're doing multiple operations.
+-}
+myContract3b = do
     awaitPromise $ endpoint @"foo" Contract.logInfo
+    -- Same as previous line but with the bar endpoint.
     awaitPromise $ endpoint @"bar" Contract.logInfo
 
-myTrace3 :: EmulatorTrace ()
-myTrace3 = do
-    h <- activateContractWallet (knownWallet 1) myContract3
+myTrace3b :: EmulatorTrace ()
+myTrace3b = do
+    h <- activateContractWallet (knownWallet 1) myContract3b
     callEndpoint @"foo" h 42
+    -- Same as previous line but with the bar endpoint.
     callEndpoint @"bar" h "Haskell"
 
-test3 :: IO ()
-test3 = runEmulatorTraceIO myTrace3
+test3b :: IO ()
+test3b = runEmulatorTraceIO myTrace3b
 
 
 -- ################################################################################################
