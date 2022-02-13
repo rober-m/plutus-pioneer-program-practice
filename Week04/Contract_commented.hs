@@ -25,6 +25,7 @@ Overview of the Contract monad parameter types:
               Contract w s e a
 
 - w -> Allow the contract to write messages of type 'w' to communicate with othe contracts. 'w' is visible from outside world.
+       We can also use this feature to interact with the UI of our Dapp
     
 - s -> Specifies the endpoints available in the contract.
 
@@ -227,22 +228,56 @@ test3b = runEmulatorTraceIO myTrace3b
 -- ################################################################################################
 -- ######################################## EXAMPLE 4 #############################################
 
+{-
+The "w" in "Contratct w s e a" has to be an instance of the Monoid type class. Lists are an instance
+of Monoids (they have mempty and mappend), so we'll use a list of Ints as "w".
+
+We won't have endpoints, so we pass "Empty". We'll use Text as the type of our errors, and we'll
+return unit.
+-}
+
 myContract4 :: Contract [Int] Empty Text ()
 myContract4 = do
+    -- We wait for 10 Slots
+    -- We use void because we don't need the value returned.
     void $ Contract.waitNSlots 10
+    {-
+    To use "w", we'll use the "tell" function that takes one argument (the state that you want to
+    write, in this case a list with a single element) and mappends to the previous state.
+
+    The state starts with mempty, adn each time "tell" is used, it mappends the current value to
+    the prevous state.
+
+    -}
+    -- Here, the state is [].
     tell [1]
+    -- Here, the state is [1].
     void $ Contract.waitNSlots 10
     tell [2]
+    -- Here, the state is [1,2].
     void $ Contract.waitNSlots 10
 
 myTrace4 :: EmulatorTrace ()
 myTrace4 = do
     h <- activateContractWallet (knownWallet 1) myContract4
 
+    -- We wait for 5 Slots 
     void $ Emulator.waitNSlots 5
+    {-
+    using observableState we can look up the state of a running contract. observableState takes
+    a handle and returns the state of the contract at that time. We bind the state to "xs".
+    -}
     xs <- observableState h
+    -- We log the state to inspect it. And check "xs" before tell [1].
+    {- At this stage, the value of "xs" is the mempty value for the correspondent Monoid (an
+    empty list of Ints: []).
+    -}
     Extras.logInfo $ show xs
 
+    {-
+    We repeat the previous 3 operations two more times to check the state after tell [1] but 
+    before tell [2], and after tell [2].
+    -}
     void $ Emulator.waitNSlots 10
     ys <- observableState h
     Extras.logInfo $ show ys
