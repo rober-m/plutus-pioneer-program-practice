@@ -45,9 +45,23 @@ payContractA = do
 Implement a trace that invokes the pay endpoint of payContract on Wallet 1 twice, each time with
 Wallet 2 as recipient, but with amounts given by the two arguments. There should be a delay of one
 slot after each endpoint call.
+
+payTrace _ _ = --IMPLEMENT ME!
+
 -}
 payTrace :: Integer -> Integer -> EmulatorTrace ()
-payTrace _ _ = undefined -- IMPLEMENT ME!
+payTrace p1 p2 = do
+    h <- activateContractWallet (knownWallet 1) payContract
+    callEndpoint @"pay" h PayParams 
+        { ppRecipient = (mockWalletPaymentPubKeyHash $ knownWallet 2)
+        , ppLovelace = p1
+        }
+    void $ Emulator.waitNSlots 1
+    callEndpoint @"pay" h PayParams 
+        { ppRecipient = (mockWalletPaymentPubKeyHash $ knownWallet 2)
+        , ppLovelace = p2
+        }
+    void $ Emulator.waitNSlots 1
 
 payTest1 :: IO ()
 payTest1 = runEmulatorTraceIO $ payTrace 10_000_000 20_000_000
