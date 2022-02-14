@@ -34,12 +34,12 @@ type PaySchema = Endpoint "pay" PayParams
 -- ################################################################################################
 -- ######################################## Problem A #############################################
 
-payContractA :: Contract () PaySchema Text ()
-payContractA = do
+payContract :: Contract () PaySchema Text ()
+payContract = do
     pp <- awaitPromise $ endpoint @"pay" return
     let tx = mustPayToPubKey (ppRecipient pp) $ lovelaceValueOf $ ppLovelace pp
     void $ submitTx tx
-    payContractA
+    payContract
 
 {-
 Implement a trace that invokes the pay endpoint of payContract on Wallet 1 twice, each time with
@@ -51,7 +51,7 @@ payTrace _ _ = --IMPLEMENT ME!
 -}
 payTrace :: Integer -> Integer -> EmulatorTrace ()
 payTrace p1 p2 = do
-    h <- activateContractWallet (knownWallet 1) payContract
+    h <- activateContractWallet (knownWallet 1) payContract'
     callEndpoint @"pay" h PayParams 
         { ppRecipient = (mockWalletPaymentPubKeyHash $ knownWallet 2)
         , ppLovelace = p1
@@ -66,6 +66,11 @@ payTrace p1 p2 = do
 payTest1 :: IO ()
 payTest1 = runEmulatorTraceIO $ payTrace 10_000_000 20_000_000
 
+{-
+payTest2 requires more Lovelace than there is in the wallet. When the first transaction is executed,
+payContract will throw an exeption and crash. That means that the second transaction (that should
+pass because the wallet has 100 Ada and the Tx it's only 20Ada) won't be executed either.
+-}
 payTest2 :: IO ()
 payTest2 = runEmulatorTraceIO $ payTrace 1000_000_000 20_000_000
 
@@ -73,13 +78,19 @@ payTest2 = runEmulatorTraceIO $ payTrace 1000_000_000 20_000_000
 -- ################################################################################################
 -- ######################################## Problem B #############################################
 {-
-Modify payContractA so it doesn't crash when payTest2 runs. (Remember to change payContractA to
-payContractB in payTrace when testing)
+Modify payContract so it doesn't crash when payTest2 runs. (Remember to change payContract to
+payContract' in payTrace when testing). That will allow for the second transaction of payTest2
+to be processed even if the first one wasn't.
 -}
 
-payContractB :: Contract () PaySchema Text ()
-payContractB = do
+-- IMP: Didn't manage to resolve the problem, this solution is from Lars.
+payContract' :: Contract () PaySchema Text ()
+payContract' = do 
     pp <- awaitPromise $ endpoint @"pay" return
     let tx = mustPayToPubKey (ppRecipient pp) $ lovelaceValueOf $ ppLovelace pp
-    void $ submitTx tx
-    payContractB
+    -- IMP: handleError goes here because submitTx is the only function that can fail?
+    handleError (\err -> Contract.logInfo $ "Caught error: " ++ unpack err) $ void $ submitTx tx
+    payContract'
+
+
+
