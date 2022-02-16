@@ -119,6 +119,10 @@ mint mp = do
       computed. We do that by passing the value to mint to mustMintValue:
 
             mustMintValue :: forall i o. Value -> TxConstraints i o
+
+      We don't specify the Redeemer because its of value unit. And the case when the Redeemer
+      is of value unit is so common that there's special treatment for that. If we have a Redeemer
+      of non-unit value, we can use mustMintValueWithRedeemer.
       -}
       tx = Constraints.mustMintValue val
   {-
