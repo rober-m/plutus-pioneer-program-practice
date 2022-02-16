@@ -98,12 +98,18 @@ mkPolicy oref tn () ctx = traceIfFalse "UTxO not consumed"   hasUTxO           &
 
     checkMintedAmount :: Bool
     {-
+    To extract the value minted by this transaction we use `txInfoMint` and pass the 
+    transaction info.
     
+    Once we obtained the value, we flatten the Map into a list of triples, and if we obtain a 
+    list that doesn't contain exactly ONE triple with the token name that we specified as parameter
+    and an ammount of one, we return False.
     -}
     checkMintedAmount = case flattenValue (txInfoMint info) of
         [(_, tn', amt)] -> tn' == tn && amt == 1
         _               -> False
 
+-- We compile the policy with the two parameters
 policy :: TxOutRef -> TokenName -> Scripts.MintingPolicy
 policy oref tn = mkMintingPolicyScript $
     $$(PlutusTx.compile [|| \oref' tn' -> Scripts.wrapMintingPolicy $ mkPolicy oref' tn' ||])
@@ -112,9 +118,21 @@ policy oref tn = mkMintingPolicyScript $
     `PlutusTx.applyCode`
     PlutusTx.liftCode tn
 
+-- We generate the CurrencySymbol with the two parameters
 curSymbol :: TxOutRef -> TokenName -> CurrencySymbol
 curSymbol oref tn = scriptCurrencySymbol $ policy oref tn
 
+-- ########################### END OF THE ON-CHAIN CODE (MINTING POLICY) ##########################
+-- ################################################################################################
+-- ################################# START OF THE OFF-CHAIN CODE ##################################
+
+{-
+We could specify the UTxO as a parameter, but that would be inconvenient for the user because the
+user would have to look up the info. Instead, we can pass the wallet address and use the Contract
+monad to find a UTxO that we can use.
+
+So we'll define the TokenName and wallet Address as the parameters.
+-}
 data NFTParams = NFTParams
     { npToken   :: !TokenName
     , npAddress :: !Address
@@ -124,13 +142,36 @@ type NFTSchema = Endpoint "mint" NFTParams
 
 mint :: NFTParams -> Contract w NFTSchema Text ()
 mint np = do
+    {- We get all the UTxOs that are siting in the wallet address (which is a map from TxOutRef
+    to the actual outputs).
+    -}
     utxos <- utxosAt $ npAddress np
+    -- We extract the keys of the utxos Map
     case Map.keys utxos of
+        -- If there's no TxOutRef, we log an error and finish executing
         []       -> Contract.logError @String "no utxo found"
+        {-
+        If there's at least one TxOutRef, we just take the first one (using patter matching)
+        because it doesn't really matter which one we use.
+        -}
         oref : _ -> do
             let tn      = npToken np
+            {- We create a Value using `singleton` and passing the CurrencySymbol, the TokenName,
+            and a 1 (one) as the ammount.
+            -}
             let val     = Value.singleton (curSymbol oref tn) tn 1
+                {-
+                As constraints we have to pass the minting policy and the utxos. We don't actually
+                need all utxos, we only need the one we used to construct the Value (named "oref"
+                above), but it doesn't matter if what we specify here is too big. utxos has to
+                contain oref. So, to make our lifes easier, we pass al utxos sitting at that
+                address.
+                -}
                 lookups = Constraints.mintingPolicy (policy oref tn) <> Constraints.unspentOutputs utxos
+                {- Here we also need to specify, not only mustMintValue to make sure a value is
+                minted/burned, but also mustSpendPubKeyOutput to make sure that the UTxO that we
+                use to mint the value is spent and non one can repeat the transaction again.
+                -}
                 tx      = Constraints.mustMintValue val <> Constraints.mustSpendPubKeyOutput oref
             ledgerTx <- submitTxConstraintsWith @Void lookups tx
             void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
@@ -140,6 +181,9 @@ endpoints :: Contract () NFTSchema Text ()
 endpoints = mint' >> endpoints
   where
     mint' = awaitPromise $ endpoint @"mint" mint
+
+-- ################################################################################################
+-- ###################################### EMULATOR TRACE ##########################################
 
 test :: IO ()
 test = runEmulatorTraceIO $ do
